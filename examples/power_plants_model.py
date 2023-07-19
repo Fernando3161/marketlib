@@ -15,8 +15,15 @@ in the different markets
 #6 Save results as graphics
 '''
 
+import sys
+import os
+path = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
+sys.path.append(path)
+
+
 from enum import Enum
-from oemof.solph import (EnergySystem, Bus, Sink, Source, Flow)
+from oemof.solph import (EnergySystem, Bus, Flow)
+from oemof.solph.components import Sink, Source
 import pandas as pd
 from examples.common import EXAMPLES_DATA_DIR, EXAMPLES_PLOTS_DIR
 import matplotlib.pyplot as plt
@@ -41,6 +48,7 @@ class PowerPlants(Enum):
     BIOGAS = 3
     PV = 4
     WIND = 5
+    BIOMASS = 6
 
 
 def get_boundary_data(year=2020, days=366):
@@ -76,7 +84,8 @@ def create_energy_system(scenario, district_df, market_data):
                        "gas": 46.17,
                        "biogas": 68.15,
                        "pv": 0,
-                       "wind": 0}
+                       "wind": 0,
+                       "biomass": 15.00}
 
     # Max energy values for Renewables based on Installed capacity of 1MW and
     # real production as a fraction of 1MW
@@ -86,6 +95,7 @@ def create_energy_system(scenario, district_df, market_data):
         "biogas": 1,  # MW
         "wind": district_df["Wind_pu"].values,  # MW
         "pv": district_df["PV_pu"].values,  # MW
+        "biomass": 1, #MW
     }
 
     energy_system = EnergySystem(timeindex=district_df.index)
@@ -138,15 +148,16 @@ def calculate_kpis(results, market_data):
     '''
 
     total_energy = results.sum() / 4  # Since it it was in 15min intervals
+    leng = min(len(results["b_el_out, s_da"]),len(market_data["day_ahead"]))
     income = {
-        "income, da": results["b_el_out, s_da"].values *
-        market_data["day_ahead"].values,
-        "income, id": results["b_el_out, s_id"].values *
-        market_data["intra_day"].values,
-        "income, fb": results["b_el_out, s_fb"].values *
-        market_data["future_base"].values,
-        "income, fp": results["b_el_out, s_fp"].values *
-        market_data["future_peak"].values}
+        "income, da": results["b_el_out, s_da"][:leng].values *
+        market_data["day_ahead"][:leng].values,
+        "income, id": results["b_el_out, s_id"][:leng].values *
+        market_data["intra_day"][:leng].values,
+        "income, fb": results["b_el_out, s_fb"][:leng].values *
+        market_data["future_base"][:leng].values,
+        "income, fp": results["b_el_out, s_fp"][:leng].values *
+        market_data["future_peak"][:leng].values}
 
     income["income, total"] = income["income, da"] + \
         income["income, id"] + income["income, fb"] + income["income, fp"]
@@ -154,9 +165,15 @@ def calculate_kpis(results, market_data):
     income_total = {k: round(v.sum() / 4, 1) for k, v in income.items()}
     income_total["average_price EUR/MWh"] = income_total["income, total"] / \
         total_energy["source, b_el_out"]
-    income_total = pd.Series(income_total)
+    #income_total = pd.Series(income_total)
 
-    kpis = total_energy.append(income_total)
+    kpis = {}
+    for idx,value in total_energy.items():
+        kpis[idx] = value
+    for idx,value in income_total.items():
+        kpis[idx] = value
+
+    kpis = pd.Series(kpis)
     return kpis
 
 
@@ -215,7 +232,7 @@ def solve_and_write_data(year=2020, days=365):
         writer.sheets[kpi_name] = worksheet
         kpis.to_excel(writer, sheet_name=kpi_name)
 
-    writer.save()
+    writer.close()
     logging.info(f"Results and KPIs saved to {data_path}")
     return results_dict
 

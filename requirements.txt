@@ -1,0 +1,7 @@
+oemof.solph
+matplotlib
+seaborn
+pandas
+numpy
+xlsxwriter
+openpyxl

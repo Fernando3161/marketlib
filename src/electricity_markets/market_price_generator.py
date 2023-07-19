@@ -8,12 +8,17 @@ Create market price time series from historical data
 Using price pattern generated from historical data from 2015-2019
 
 '''
+import sys
+import os
+path = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
+sys.path.append(path)
+
 import pandas as pd
 from os.path import join
 import logging
 import os
-from .common import PROC_DATA_DIR, RAW_DATA_DIR
-from pandas.core.common import SettingWithCopyWarning
+from src.electricity_markets.common import PROC_DATA_DIR, RAW_DATA_DIR
+from pandas.errors import SettingWithCopyWarning
 import warnings
 
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
@@ -204,7 +209,7 @@ def create_markets_info(
 
     day_ahead = create_price_pattern(
         year=year, market="da", mean_val=mean_da)
-    day_ahead = day_ahead.resample("15min").pad()
+    day_ahead = day_ahead.resample("15min").ffill()
     intra_day = create_price_pattern(
         year=year, market="id", mean_val=mean_id)
     markets_data = pd.concat([day_ahead, intra_day], axis=1)

@@ -22,14 +22,19 @@ The Energy System of the District consists of:
 * Electric bus for selling energy
 * 4 Sinks for selling energy representing the 4 electric markets
 '''
+import sys
+import os
+path = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
+sys.path.append(path)
 
 import pandas as pd
 from examples.common import (
     EXAMPLES_DATA_DIR,
     EXAMPLES_RESULTS_DIR,
     EXAMPLES_PLOTS_DIR)
-from oemof.solph import (EnergySystem, Bus, Sink, Source, Flow,
-                         Transformer, GenericStorage)
+from oemof.solph import EnergySystem, Bus, Flow
+
+from oemof.solph.components import Sink, Source, Transformer, GenericStorage
 from oemof.solph import views, processing
 import matplotlib.pyplot as plt
 import logging
@@ -137,7 +142,7 @@ def get_district_dataframe(year=2017):
     district_df.set_index("Date", inplace=True)
 
     # Set the time resolution as 15 mins
-    district_df = district_df.resample("15T").pad()
+    district_df = district_df.resample("15T").ffill()
 
     # Remove the last value as it is for 01-Jan 00:00 of next year.
     return district_df[:-1]
@@ -358,10 +363,7 @@ def solve_model(model):
     :param model: oemof.solph model.
     '''
     # Solve the model
-    model.solve(solver="cbc",
-                solve_kwargs={'tee': False},
-                solver_io='lp',
-                cmdline_options={'ratio': 0.1})
+    model.solve(solver="glpk", solve_kwargs={"tee": False})
     energy_system = model.es
     if model.solver_results.Solver[0].Status != "ok":
         raise AssertionError("Solver did not converge. Stopping simulation")
