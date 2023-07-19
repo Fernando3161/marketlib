@@ -31,6 +31,9 @@ from examples.district_model_4_markets import get_district_dataframe,\
     solve_model, post_process_results
 from os.path import join
 import logging
+import seaborn as sns
+sns.set_style("darkgrid")
+sns.set(font = "arial")
 try:
     from electricity_markets.market_price_generator import create_markets_info
     from electricity_markets.electricity_market_constraints import build_model_and_constraints
@@ -247,13 +250,15 @@ def create_graphs(results_dict, year):
         results = results_dict[scenario]
         c = [c for c in results.columns if "b_el_out" in c.split(",")[0]]
         styles = ['b', 'r:', 'y-.', 'g-.']
-
+        fig,ax = plt.subplots(figsize= (12,4))
+        results[c].plot(ax=ax)
+        ax.set_title(str(scenario.name) + " Power Plant", fontweight="bold")
         # Create Plots
-        results[c].plot(
-            figsize=(16, 12),
-            style=styles,
-            title=str(scenario.name) + " Power Plant")
-        plt.savefig(
+        # results[c].plot(
+        #     figsize=(16, 12),
+        #     style=styles,
+        #     title=str(scenario.name) + " Power Plant")
+        fig.savefig(
             join(
                 EXAMPLES_PLOTS_DIR,
                 f"PowerPlant-{scenario.name}-{year}.jpg"))
@@ -271,4 +276,4 @@ def main(year=2020, days=365):
 
 
 if __name__ == '__main__':
-    main(year=2020, days=28)
+    main(year=2020, days=90)
