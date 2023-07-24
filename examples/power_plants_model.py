@@ -17,6 +17,7 @@ in the different markets
 
 import sys
 import os
+
 path = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
 sys.path.append(path)
 
@@ -25,7 +26,8 @@ from enum import Enum
 from oemof.solph import (EnergySystem, Bus, Flow)
 from oemof.solph.components import Sink, Source
 import pandas as pd
-from examples.common import EXAMPLES_DATA_DIR, EXAMPLES_PLOTS_DIR
+from src.electricity_markets.common import REAL_RAW_DATA_DIR
+from examples.common import EXAMPLES_DATA_DIR, EXAMPLES_PLOTS_DIR, EXAMPLES_RESULTS_DIR
 import matplotlib.pyplot as plt
 from examples.district_model_4_markets import get_district_dataframe,\
     solve_model, post_process_results
@@ -34,12 +36,12 @@ import logging
 import seaborn as sns
 sns.set_style("darkgrid")
 sns.set(font = "arial")
-try:
-    from electricity_markets.market_price_generator import create_markets_info
-    from electricity_markets.electricity_market_constraints import build_model_and_constraints
-except Exception:
-    from src.electricity_markets.market_price_generator import create_markets_info
-    from src.electricity_markets.electricity_market_constraints import build_model_and_constraints
+# try:
+#     from electricity_markets.market_price_generator import create_markets_info
+#     from electricity_markets.electricity_market_constraints import build_model_and_constraints
+#except Exception:
+from src.electricity_markets.real_market_price_generator import create_markets_info
+from src.electricity_markets.electricity_market_constraints import build_model_and_constraints
 
 
 class PowerPlants(Enum):
@@ -83,12 +85,26 @@ def create_energy_system(scenario, district_df, market_data):
     meta_data = {}
 
     # Variable costs information, EUR/MWh
-    meta_data["cv"] = {"coal": 43.92,
-                       "gas": 46.17,
-                       "biogas": 68.15,
+    PLANT_DATA_FILE = join(REAL_RAW_DATA_DIR, "Plant_Assumptions.xlsx")
+    plant_price_data = pd.read_excel(PLANT_DATA_FILE, "Plant Assumptions",
+                                #index_col="Year",
+                                engine='openpyxl',
+                                skiprows=6, nrows=10)
+
+    plant_price_data.drop([0], inplace=True)                               
+    plant_price_data.rename(columns={"Unnamed: 2": "Technology"}, inplace=True)
+    plant_price_data.set_index("Technology", inplace=True)
+    plant_price_data
+
+
+
+    meta_data["cv"] = {"coal": plant_price_data.at["Hard Coal", "Total c_V"], 
+                       "gas": plant_price_data.at["Natural Gas", "Total c_V"], 
+                       "biogas": plant_price_data.at["Biogas", "Total c_V"], 
                        "pv": 0,
                        "wind": 0,
-                       "biomass": 15.00}
+                       "biomass": plant_price_data.at["Biomass", "Total c_V"], 
+                       }
 
     # Max energy values for Renewables based on Installed capacity of 1MW and
     # real production as a fraction of 1MW
@@ -206,7 +222,7 @@ def solve_and_write_data(year=2020, days=365):
     :param year: Year of data
     :param days: Number of days to model, starting on 01/01
     '''
-    data_path = join(EXAMPLES_DATA_DIR, 'PowerPlantsModels.xlsx')
+    data_path = join(EXAMPLES_RESULTS_DIR, f'PowerPlantsModels_{year}.xlsx')
     writer = pd.ExcelWriter(data_path, engine='xlsxwriter')
 
     results_dict = {}
@@ -249,15 +265,9 @@ def create_graphs(results_dict, year):
     for scenario in PowerPlants:
         results = results_dict[scenario]
         c = [c for c in results.columns if "b_el_out" in c.split(",")[0]]
-        styles = ['b', 'r:', 'y-.', 'g-.']
         fig,ax = plt.subplots(figsize= (12,4))
         results[c].plot(ax=ax)
         ax.set_title(str(scenario.name) + " Power Plant", fontweight="bold")
-        # Create Plots
-        # results[c].plot(
-        #     figsize=(16, 12),
-        #     style=styles,
-        #     title=str(scenario.name) + " Power Plant")
         fig.savefig(
             join(
                 EXAMPLES_PLOTS_DIR,

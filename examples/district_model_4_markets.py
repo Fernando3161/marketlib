@@ -46,7 +46,7 @@ try:
     from electricity_markets.market_price_generator import create_markets_info
     from electricity_markets.electricity_market_constraints import build_model_and_constraints
 except Exception:
-    from src.electricity_markets.market_price_generator import create_markets_info
+    from src.electricity_markets.real_market_price_generator import create_markets_info
     from src.electricity_markets.electricity_market_constraints import build_model_and_constraints
 
 import warnings

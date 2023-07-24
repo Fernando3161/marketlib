@@ -5,3 +5,5 @@ pandas
 numpy
 xlsxwriter
 openpyxl
+iypkernel
+scipy
