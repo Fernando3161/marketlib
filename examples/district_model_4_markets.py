@@ -27,21 +27,22 @@ import os
 path = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
 sys.path.append(path)
 
-import pandas as pd
+import warnings
+import json
+from os.path import join
+from enum import Enum
+import logging
+import matplotlib.pyplot as plt
+from oemof.solph import views, processing
+from oemof.solph.components import Sink, Source, Transformer, GenericStorage
+from oemof.solph import EnergySystem, Bus, Flow
 from examples.common import (
     EXAMPLES_DATA_DIR,
     EXAMPLES_RESULTS_DIR,
-    EXAMPLES_PLOTS_DIR)
-from oemof.solph import EnergySystem, Bus, Flow
+    EXAMPLES_PLOTS_DIR,
+    check_and_create_all_folders)
+import pandas as pd
 
-from oemof.solph.components import Sink, Source, Transformer, GenericStorage
-from oemof.solph import views, processing
-import matplotlib.pyplot as plt
-import logging
-from enum import Enum
-import os
-from os.path import join
-import json
 try:
     from electricity_markets.market_price_generator import create_markets_info
     from electricity_markets.electricity_market_constraints import build_model_and_constraints
@@ -49,10 +50,7 @@ except Exception:
     from src.electricity_markets.real_market_price_generator import create_markets_info
     from src.electricity_markets.electricity_market_constraints import build_model_and_constraints
 
-import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
-
-
 logging.basicConfig(level=logging.INFO)
 
 GAS_PRICE = 3.66  # EUR per mmBTU
@@ -452,6 +450,8 @@ def create_and_solve_scenario(days=7, year=2017, sizing=None, scenario=1):
 
 
 def main(year=2019, days=28):
+    check_and_create_all_folders()
+
     for scenario in Scenarios:
         create_and_solve_scenario(days=days, year=year, scenario=scenario)
     logging.info("All scenarios terminated succesfully")

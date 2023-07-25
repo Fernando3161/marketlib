@@ -203,7 +203,7 @@ def create_price_pattern(year, market, mean_val=None, normalization = True):
             market.upper(), year))
 
     # Uncomment to write results
-    market_df.to_csv(f"market_{year}_{market}_mean_{mean_val}.csv")
+    # market_df.to_csv(f"market_{year}_{market}_mean_{mean_val}.csv")
 
     return res
 

@@ -17,31 +17,27 @@ in the different markets
 
 import sys
 import os
-
 path = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
 sys.path.append(path)
 
 
-from enum import Enum
-from oemof.solph import (EnergySystem, Bus, Flow)
-from oemof.solph.components import Sink, Source
-import pandas as pd
-from src.electricity_markets.common import REAL_RAW_DATA_DIR
-from examples.common import EXAMPLES_DATA_DIR, EXAMPLES_PLOTS_DIR, EXAMPLES_RESULTS_DIR
-import matplotlib.pyplot as plt
+from src.electricity_markets.electricity_market_constraints import build_model_and_constraints
+from src.electricity_markets.real_market_price_generator import create_markets_info
+import seaborn as sns
+import logging
+from os.path import join
 from examples.district_model_4_markets import get_district_dataframe,\
     solve_model, post_process_results
-from os.path import join
-import logging
-import seaborn as sns
+import matplotlib.pyplot as plt
+from examples.common import EXAMPLES_PLOTS_DIR, EXAMPLES_RESULTS_DIR, check_and_create_all_folders
+from src.electricity_markets.common import REAL_RAW_DATA_DIR
+import pandas as pd
+from oemof.solph.components import Sink, Source
+from oemof.solph import (EnergySystem, Bus, Flow)
+from enum import Enum
+
 sns.set_style("darkgrid")
-sns.set(font = "arial")
-# try:
-#     from electricity_markets.market_price_generator import create_markets_info
-#     from electricity_markets.electricity_market_constraints import build_model_and_constraints
-#except Exception:
-from src.electricity_markets.real_market_price_generator import create_markets_info
-from src.electricity_markets.electricity_market_constraints import build_model_and_constraints
+sns.set(font="arial")
 
 
 class PowerPlants(Enum):
@@ -57,12 +53,16 @@ class PowerPlants(Enum):
 
 
 def get_boundary_data(year=2020, days=366):
-    '''
-    Constructs dataframes with the information for modelling
+    """
+    Constructs dataframes with the information for modeling.
 
-    :param year: Year under consideration
-    :param days: Days to model. Default is 366 for a leap year
-    '''
+    Args:
+        year (int, optional): Year under consideration. Default is 2020.
+        days (int, optional): Days to model. Default is 366 for a leap year.
+
+    Returns:
+        tuple: Two dataframes - district_df and market_data.
+    """
     district_df = get_district_dataframe(year=year).head(24 * 4 * days)
 
     # Create Energy System with the dataframe time series
@@ -74,36 +74,33 @@ def get_boundary_data(year=2020, days=366):
 
 
 def create_energy_system(scenario, district_df, market_data):
-    '''
-    Creates an oemof energy system for the input scenario
+    """
+    Creates an oemof energy system for the input scenario.
 
-    :param scenario: One of the PowerPlants Scenario
-    :param district_df: Dataframe with the district information
-    :param market_data: Dataframe with market prices for each market
-    '''
+    Args:
+        scenario (PowerPlants): One of the PowerPlants Scenario.
+        district_df (pd.DataFrame): Dataframe with the district information.
+        market_data (pd.DataFrame): Dataframe with market prices for each market.
+    """
 
     meta_data = {}
 
     # Variable costs information, EUR/MWh
     PLANT_DATA_FILE = join(REAL_RAW_DATA_DIR, "Plant_Assumptions.xlsx")
     plant_price_data = pd.read_excel(PLANT_DATA_FILE, "Plant Assumptions",
-                                #index_col="Year",
-                                engine='openpyxl',
-                                skiprows=6, nrows=10)
+                                     # index_col="Year",
+                                     engine='openpyxl',
+                                     skiprows=6, nrows=10)
 
-    plant_price_data.drop([0], inplace=True)                               
+    plant_price_data.drop([0], inplace=True)
     plant_price_data.rename(columns={"Unnamed: 2": "Technology"}, inplace=True)
     plant_price_data.set_index("Technology", inplace=True)
-    plant_price_data
-
-
-
-    meta_data["cv"] = {"coal": plant_price_data.at["Hard Coal", "Total c_V"], 
-                       "gas": plant_price_data.at["Natural Gas", "Total c_V"], 
-                       "biogas": plant_price_data.at["Biogas", "Total c_V"], 
+    meta_data["cv"] = {"coal": plant_price_data.at["Hard Coal", "Total c_V"],
+                       "gas": plant_price_data.at["Natural Gas", "Total c_V"],
+                       "biogas": plant_price_data.at["Biogas", "Total c_V"],
                        "pv": 0,
                        "wind": 0,
-                       "biomass": plant_price_data.at["Biomass", "Total c_V"], 
+                       "biomass": plant_price_data.at["Biomass", "Total c_V"],
                        }
 
     # Max energy values for Renewables based on Installed capacity of 1MW and
@@ -114,7 +111,7 @@ def create_energy_system(scenario, district_df, market_data):
         "biogas": 1,  # MW
         "wind": district_df["Wind_pu"].values,  # MW
         "pv": district_df["PV_pu"].values,  # MW
-        "biomass": 1, #MW
+        "biomass": 1,  # MW
     }
 
     energy_system = EnergySystem(timeindex=district_df.index)
@@ -145,7 +142,8 @@ def create_energy_system(scenario, district_df, market_data):
 
     s_future_peak = Sink(
         label="s_fp",
-        inputs={b_el: Flow(variable_costs=-market_data["future_peak"].values)})
+        inputs={b_el: Flow(variable_costs=-market_data["future_peak"].values
+                           )})
 
     energy_system.add(
         b_el,
@@ -159,15 +157,19 @@ def create_energy_system(scenario, district_df, market_data):
 
 
 def calculate_kpis(results, market_data):
-    '''
-    Calculate a set of KPIs and return them as dataframe
+    """
+    Calculate a set of KPIs and return them as a dataframe.
 
-    :param results: Results dataframe
-    :param market_data: Market dataframe
-    '''
+    Args:
+        results (pd.DataFrame): Results dataframe.
+        market_data (pd.DataFrame): Market dataframe.
+
+    Returns:
+        pd.Series: A series containing calculated KPIs.
+    """
 
     total_energy = results.sum() / 4  # Since it it was in 15min intervals
-    leng = min(len(results["b_el_out, s_da"]),len(market_data["day_ahead"]))
+    leng = min(len(results["b_el_out, s_da"]), len(market_data["day_ahead"]))
     income = {
         "income, da": results["b_el_out, s_da"][:leng].values *
         market_data["day_ahead"][:leng].values,
@@ -184,12 +186,12 @@ def calculate_kpis(results, market_data):
     income_total = {k: round(v.sum() / 4, 1) for k, v in income.items()}
     income_total["average_price EUR/MWh"] = income_total["income, total"] / \
         total_energy["source, b_el_out"]
-    #income_total = pd.Series(income_total)
+    # income_total = pd.Series(income_total)
 
     kpis = {}
-    for idx,value in total_energy.items():
+    for idx, value in total_energy.items():
         kpis[idx] = value
-    for idx,value in income_total.items():
+    for idx, value in income_total.items():
         kpis[idx] = value
 
     kpis = pd.Series(kpis)
@@ -197,14 +199,18 @@ def calculate_kpis(results, market_data):
 
 
 def model_power_plant_scenario(scenario, district_df, market_data, days=365):
-    '''
-    Model an scenario and calculate KPIs based on the given boundary data
+    """
+    Model a scenario and calculate KPIs based on the given boundary data.
 
-    :param scenario: Scenario from PowerPlants
-    :param district_df: Dataframe with information of the District
-    :param market_data: Market Data with electricity price information
-    :param days: Number of days to model, starting on 01/01
-    '''
+    Args:
+        scenario (PowerPlants): Scenario from PowerPlants.
+        district_df (pd.DataFrame): Dataframe with information of the District.
+        market_data (pd.DataFrame): Market Data with electricity price information.
+        days (int, optional): Number of days to model, starting on 01/01. Default is 365.
+
+    Returns:
+        tuple: Two dataframes - results and kpis.
+    """
 
     es = create_energy_system(scenario, district_df, market_data)
     model = build_model_and_constraints(es)
@@ -216,12 +222,16 @@ def model_power_plant_scenario(scenario, district_df, market_data, days=365):
 
 
 def solve_and_write_data(year=2020, days=365):
-    '''
-    Solve the different scenarios and write the data to a XLSX
+    """
+    Solve the different scenarios and write the data to an XLSX.
 
-    :param year: Year of data
-    :param days: Number of days to model, starting on 01/01
-    '''
+    Args:
+        year (int, optional): Year of data. Default is 2020.
+        days (int, optional): Number of days to model, starting on 01/01. Default is 365.
+
+    Returns:
+        dict: A dictionary containing results for different scenarios.
+    """
     data_path = join(EXAMPLES_RESULTS_DIR, f'PowerPlantsModels_{year}.xlsx')
     writer = pd.ExcelWriter(data_path, engine='xlsxwriter')
 
@@ -256,34 +266,39 @@ def solve_and_write_data(year=2020, days=365):
     return results_dict
 
 
-def create_graphs(results_dict, year):
-    '''
-    Create graphs and save them in the Results visualization directory
+def create_graphs(results_dict, year,days):
+    """
+    Create graphs and save them in the Results visualization directory.
 
-    :param results_dict: Dictionary with the results from the different scenarios
-    '''
+    Args:
+        results_dict (dict): Dictionary with the results from the different scenarios.
+        year (int): Year for which the graphs are created.
+    """
     for scenario in PowerPlants:
         results = results_dict[scenario]
         c = [c for c in results.columns if "b_el_out" in c.split(",")[0]]
-        fig,ax = plt.subplots(figsize= (12,4))
+        fig, ax = plt.subplots(figsize=(12, 4))
         results[c].plot(ax=ax)
-        ax.set_title(str(scenario.name) + " Power Plant", fontweight="bold")
+        ax.set_title(str(scenario.name.capitalize()) + " Power Plant", fontweight="bold")
         fig.savefig(
             join(
                 EXAMPLES_PLOTS_DIR,
-                f"PowerPlant-{scenario.name}-{year}.jpg"))
-        logging.info(f"Plot saved for Scenario {scenario.name}")
+                f"PowerPlant-{scenario.name.capitalize()}-{year}-{days}d.jpg"))
+        logging.info(f"Plot saved for Scenario {scenario.name.capitalize()}")
 
 
 def main(year=2020, days=365):
-    '''
-    Chain functions to solve, write, and plot data from the scenario results
+    """
+    Chain functions to solve, write, and plot data from the scenario results.
 
-    :param days: Number of days to plot, starting on 01/01
-    '''
+    Args:
+        year (int, optional): Year of data. Default is 2020.
+        days (int, optional): Number of days to plot, starting on 01/01. Default is 365.
+    """
+    check_and_create_all_folders()
     results_dict = solve_and_write_data(year=year, days=days)
-    create_graphs(results_dict, year)
+    create_graphs(results_dict, year,days=days)
 
 
 if __name__ == '__main__':
-    main(year=2020, days=90)
+    main(year=2020, days=7)
