@@ -78,3 +78,7 @@ examples/data/PowerPlantsModels.xlsx
 *.png
 *.csv
 *.ipynb
+src/electricity_markets/raw/real_data/ID_RawData.xlsb
+src/electricity_markets/raw/real_data/DA_RawData.xlsb
+src/electricity_markets/raw/real_data/DA_RawData.xlsx
+src/electricity_markets/raw/real_data/ID_RawData.xlsx
