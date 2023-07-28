@@ -37,6 +37,7 @@ from oemof.solph import views, processing
 from oemof.solph.components import Sink, Source, Transformer, GenericStorage
 from oemof.solph import EnergySystem, Bus, Flow
 from examples.common import (
+    BASE_DIR,
     EXAMPLES_DATA_DIR,
     EXAMPLES_RESULTS_DIR,
     EXAMPLES_PLOTS_DIR,
@@ -103,47 +104,56 @@ def get_district_dataframe(year=2017):
     heat = pd.read_excel(EXCEL_DATA, "heat demand series", engine='openpyxl')[
         "DE01"][2:].tolist()
 
+
+    EXCEL_VOLATILE_DATA= os.path.join(BASE_DIR,"src", "electricity_markets", "raw", "real_data", "Supply_Profiles_Volatil.xlsx")
+
+    assert os.path.isfile(EXCEL_VOLATILE_DATA)==True
+
+    volatile_data =    pd.read_excel(EXCEL_VOLATILE_DATA, "Volatil_Profiles", engine='openpyxl',skiprows=7)
+
+    volatile_data.drop(0, axis=0, inplace=True)
+    volatile_data=volatile_data.head(35040)
+    volatile_data
+
     # PV Production per kW installed (as data source, no direct PV Modeling)
-    pv_df = pd.read_excel(EXCEL_DATA, "volatile series", engine='openpyxl')
-
-    # Data is on the 4th column
-    pv_pu = pv_df[pv_df.columns[3]][2:].tolist()
-
-    # Wind Production per kW installed (as data source, no direct WK Modeling)
-    wind_df = pd.read_excel(EXCEL_DATA, "volatile series", engine='openpyxl')
+        # Data is on the 4th column
+    pv_pu = volatile_data["PV real"].tolist()
 
     # Data is on the 5th column
-    wind_pu = wind_df[wind_df.columns[4]][2:].tolist()
+    wind_onshore_pu = volatile_data["Wind Onshore Global"].tolist()
+    wind_offshore_pu = volatile_data["Wind Offshore Global"].tolist()
 
     # Complete the last hour so I get a full year.
     # Copy the last value for simplicity
     electricity.append(electricity[-1])
     heat.append(heat[-1])
-    pv_pu.append(pv_pu[-1])
-    wind_pu.append(wind_pu[-1])
+
 
     min_len = min(len(dates),
                   len(electricity),
                   len(heat),
-                  len(pv_pu),
-                  len(wind_pu))
+                  )
 
     # Build Dataframe from a dictionary
     district_data = {
         "Date": dates[0:min_len],
         "Electricity": electricity[0:min_len],
         "Heat": heat[0:min_len],
-        "PV_pu": pv_pu[0:min_len],
-        "Wind_pu": wind_pu[0:min_len]}
+        }
 
     district_df = pd.DataFrame.from_dict(district_data)
     district_df.set_index("Date", inplace=True)
 
     # Set the time resolution as 15 mins
     district_df = district_df.resample("15T").ffill()
+    district_df = district_df[:-1]
+    district_df["pv_pu"]= pv_pu
+    district_df["wind_offshore_pu"]= wind_offshore_pu
+    district_df["wind_onshore_pu"]= wind_onshore_pu
+
 
     # Remove the last value as it is for 01-Jan 00:00 of next year.
-    return district_df[:-1]
+    return district_df
 
 
 def get_market_dataframe(days=7, year=2017, scenario=Scenarios.BASELINE):
@@ -361,7 +371,11 @@ def solve_model(model):
     :param model: oemof.solph model.
     '''
     # Solve the model
-    model.solve(solver="glpk", solve_kwargs={"tee": False})
+    try:
+        model.solve(solver="glpk", solve_kwargs={"tee": False})
+    except:
+        model.solve(solver="cbc", solve_kwargs={"tee": False})
+
     energy_system = model.es
     if model.solver_results.Solver[0].Status != "ok":
         raise AssertionError("Solver did not converge. Stopping simulation")
@@ -458,4 +472,5 @@ def main(year=2019, days=28):
 
 
 if __name__ == '__main__':
-    main(year=2020, days=28)
+    get_district_dataframe(2017)
+    #main(year=2020, days=28)

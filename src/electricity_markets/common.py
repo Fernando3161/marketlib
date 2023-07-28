@@ -21,8 +21,8 @@ def get_project_root():
 
 BASE_DIR = get_project_root()
 SOURCE_DIR = join(BASE_DIR, "src")
-ENERGY_MARKETS_DIR = join(BASE_DIR, "electricity_markets")
-RAW_DATA_DIR = join(ENERGY_MARKETS_DIR, "raw")
+ELECTRICITY_MARKETS_DIR = join(BASE_DIR, "electricity_markets")
+RAW_DATA_DIR = join(ELECTRICITY_MARKETS_DIR, "raw")
 REAL_RAW_DATA_DIR = join(RAW_DATA_DIR, "real_data")
 DATA_DIR = join(BASE_DIR, "data")
 PROC_DATA_DIR = join(DATA_DIR, "processed")

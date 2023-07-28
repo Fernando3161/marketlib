@@ -39,6 +39,7 @@ def check_and_create_folders(folders):
 BASE_DIR = get_project_root()
 SOURCE_DIR = join(BASE_DIR, "src")
 ENERGY_MARKETS_DIR = join(SOURCE_DIR, "energy_markets")
+ELECTRICITY_MARKETS_DIR = join(SOURCE_DIR, "electricity_markets")
 EXAMPLES_DIR = join(BASE_DIR, "examples")
 EXAMPLES_DATA_DIR = join(EXAMPLES_DIR, "data")
 EXAMPLES_RESULTS_DIR = join(EXAMPLES_DIR, "results")
@@ -53,6 +54,7 @@ def check_and_create_all_folders():
         BASE_DIR,
         SOURCE_DIR,
         ENERGY_MARKETS_DIR,
+        ELECTRICITY_MARKETS_DIR,
         EXAMPLES_DIR,
         EXAMPLES_DATA_DIR,
         EXAMPLES_RESULTS_DIR,

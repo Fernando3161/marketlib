@@ -8,21 +8,23 @@ Create market price time series from historical data
 Using price pattern generated from historical data from 2015-2019
 
 '''
-import random
+from scipy.stats import norm
+import warnings
+from pandas.errors import SettingWithCopyWarning
+import logging
+from os.path import join
+import pandas as pd
+import copy
+import datetime
 import sys
 import os
-path = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir,os.pardir))
+import numpy as np
+path = os.path.realpath(os.path.join(
+    os.path.dirname(__file__), os.pardir, os.pardir))
+
 sys.path.append(path)
-print(path)
+from src.electricity_markets.common import ELECTRICITY_MARKETS_DIR, PROC_DATA_DIR, RAW_DATA_DIR, REAL_RAW_DATA_DIR
 from src.electricity_markets.lehmer import LehmerRandom
-import pandas as pd
-from os.path import join
-import logging
-import os
-from src.electricity_markets.common import PROC_DATA_DIR, RAW_DATA_DIR, REAL_RAW_DATA_DIR
-from pandas.errors import SettingWithCopyWarning
-import warnings
-from scipy.stats import norm
 
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 logging.basicConfig(level=logging.INFO)
@@ -38,10 +40,11 @@ def dow(x):
     Returns:
         int: The equivalend Day of Week used for price patterns. 
     """
-    conversion= {0:2, 1:4,2:4,3:4,4:6,5:7,6:1}
+    conversion = {0: 2, 1: 4, 2: 4, 3: 4, 4: 6, 5: 7, 6: 1}
     return conversion[x]
 
-def create_price_pattern(year, market, mean_val=None, normalization = True):
+
+def create_price_pattern(year, market, mean_val=None, normalization=True):
     '''
     Creates a Price Pattern for the Day Ahead Price.
     Uses existing profiles to compose a pattern for a whole year
@@ -75,7 +78,6 @@ def create_price_pattern(year, market, mean_val=None, normalization = True):
     # Need some parameters of the Datetime object to search patterns
     import numpy as np
 
-        
     random_generator = LehmerRandom(seed=12345)
 
     market_df["Date"] = dti
@@ -83,12 +85,13 @@ def create_price_pattern(year, market, mean_val=None, normalization = True):
     market_df["DayOfWeek"] = dti.dayofweek
     market_df["EquivalentDayOfWeek"] = [dow(x) for x in market_df["DayOfWeek"]]
     if market == "da":
-        probabilities = [random_generator.random() for _ in range(4*len(market_df["Date"]))]
+        probabilities = [random_generator.random()
+                         for _ in range(4*len(market_df["Date"]))]
         market_df["Probability"] = probabilities[::4]
 
-
     if market == "id":
-        market_df["Probability"] = [random_generator.random() for _ in range(len(market_df["Date"]))]
+        market_df["Probability"] = [random_generator.random()
+                                    for _ in range(len(market_df["Date"]))]
     EXCEL_DATA = join(REAL_RAW_DATA_DIR, "SPOT_PP_YearWeekly.xlsx")
 
     # Excel reader
@@ -105,11 +108,10 @@ def create_price_pattern(year, market, mean_val=None, normalization = True):
         skiprows=1)
 
     price_data
-    price_data.drop(["Raw", "END"],axis=1, inplace=True)
-    price_data=price_data.head(60)
+    price_data.drop(["Raw", "END"], axis=1, inplace=True)
+    price_data = price_data.head(60)
 
-
-    ## read volatility data
+    # read volatility data
     EXCEL_DATA_VOLAT = join(REAL_RAW_DATA_DIR, "SPOT_VP_YearWeekly.xlsx")
 
     # Excel reader
@@ -117,7 +119,6 @@ def create_price_pattern(year, market, mean_val=None, normalization = True):
         sheet = "VP_DA_YearWeek"
     elif market == "id":
         sheet = "VP_ID_YearWeek"
-
 
     volatility_data = pd.read_excel(
         EXCEL_DATA_VOLAT,
@@ -127,12 +128,12 @@ def create_price_pattern(year, market, mean_val=None, normalization = True):
         skiprows=1)
 
     volatility_data
-    volatility_data.drop(["END"],axis=1, inplace=True)
+    volatility_data.drop(["END"], axis=1, inplace=True)
     volatility_data.dropna(axis=1, how="all", inplace=True)
 
-    volatility_data=volatility_data.head(60)
+    volatility_data = volatility_data.head(60)
 
-    price_info ={
+    price_info = {
         "price": price_data,
         "volatility": volatility_data
     }
@@ -142,7 +143,8 @@ def create_price_pattern(year, market, mean_val=None, normalization = True):
         price = []
         while i < periods:
             month = market_df.at[i, "Month"]
-            day_of_week = market_df.at[i, "EquivalentDayOfWeek"]  # Python puts monday at 0
+            # Python puts monday at 0
+            day_of_week = market_df.at[i, "EquivalentDayOfWeek"]
             # Filter data to search the corresponding values
             da_data_month = price_data[price_data["Month"] == month]
             da_data_day = da_data_month[da_data_month["TypDay"] == day_of_week]
@@ -151,19 +153,19 @@ def create_price_pattern(year, market, mean_val=None, normalization = True):
             cols = partial_data.columns
             partial_data = partial_data.drop(
                 ["Month", "TypDay"]
-                )
+            )
             if market == "da":
-                price = price + list(partial_data[cols[0]][0:24]) 
+                price = price + list(partial_data[cols[0]][0:24])
                 i += 24
-                
+
             elif market == "id":
-                price = price + list(partial_data[cols[0]][0:24*4]) 
+                price = price + list(partial_data[cols[0]][0:24*4])
                 i += 24 * 4
 
         market_df[key] = price
 
-    market_df["price_uc"]=norm.ppf(market_df["Probability"], loc=market_df["price"], scale=market_df["volatility"])
-
+    market_df["price_uc"] = norm.ppf(
+        market_df["Probability"], loc=market_df["price"], scale=market_df["volatility"])
 
     market_df.head()
     market_df["market_price"] = market_df["price_uc"]
@@ -179,7 +181,8 @@ def create_price_pattern(year, market, mean_val=None, normalization = True):
     if mean_val:
         # Override the previous one if mean value is given
         # The values of the profiles in the excel data are normalized to 100
-        market_df["market_price_year"] = market_df["market_price"] * mean_val / 100
+        market_df["market_price_year"] = market_df["market_price"] * \
+            mean_val / 100
     else:
         market_df["market_price_year"] = market_df["market_price"]
 
@@ -214,7 +217,8 @@ def create_markets_info(
         mean_id=None,
         fb=None,
         fp=None,
-        save_csv=True):
+        save_csv=True,
+        use_real_data=False):
     '''
     Creates a dataframe with information on the IntraDay, Day Ahead, Future Base, and Future Peak
     markets
@@ -250,14 +254,14 @@ def create_markets_info(
         raise ValueError(
             'Future Peak price "fp=" must be given for years not in 2018-2027')
 
-    # Get Markets Info 
+    # Get Markets Info
     MARKET_DATA_FILE = join(REAL_RAW_DATA_DIR, "Market_Assumptions.xlsx")
     markets_price_data = pd.read_excel(MARKET_DATA_FILE, "Market Assumptions",
-                                    index_col="Year",
-                                    engine='openpyxl',
-                                    skiprows=3, nrows=12
-                                    
-                                    )
+                                       index_col="Year",
+                                       engine='openpyxl',
+                                       skiprows=3, nrows=12
+
+                                       )
 
     # Get DA and ID info
     if year in range(2015, 2027):
@@ -313,9 +317,9 @@ def create_markets_info(
     # now a quick solution is to move the prices 1 hour up for the times with
     # utc +2
     da_utc = [markets_data["day_ahead"][i] if diff[i] ==
-                False else markets_data["day_ahead"][i + 4] for i in range(0, len(diff))]
+              False else markets_data["day_ahead"][i + 4] for i in range(0, len(diff))]
     id_utc = [markets_data["intra_day"][i] if diff[i] ==
-                False else markets_data["intra_day"][i + 4] for i in range(0, len(diff))]
+              False else markets_data["intra_day"][i + 4] for i in range(0, len(diff))]
 
     markets_data["day_ahead"] = da_utc
     markets_data["intra_day"] = id_utc
@@ -334,8 +338,153 @@ def create_markets_info(
             markets_data.to_csv(
                 join(
                     os.getcwd(),
-                    "EnergyMarketPrice_{}.csv".format(year)))    
-    return markets_data
+                    "EnergyMarketPrice_{}.csv".format(year)))
+    if not use_real_data:
+        logging.info("Using profiles for market price data information")
+
+        return markets_data
+
+    if use_real_data:
+        logging.info("Using real market price data information")
+        real_market_data = copy.deepcopy(markets_data)
+        da_price = get_real_values_da(year=year)
+        real_market_data["day_ahead"] = [p for p in da_price]
+        id_price = get_real_values_id(year=year)
+        real_market_data["intra_day"]= [p for p in id_price]
+        return real_market_data
+
+
+
+
+def get_real_values_da(year=2018):
+    # Get Path for the real data of DA
+    DA_EXCEL_REAL = os.path.join(
+        ELECTRICITY_MARKETS_DIR, "raw", "real_data", "DA_RawData.xlsx")
+    if not os.path.isfile(DA_EXCEL_REAL):
+        raise AssertionError(
+            f"File with Day Ahead Data does not exist: \n {DA_EXCEL_REAL}")
+
+    if year not in range(2015,2020):
+        raise ValueError("Year must be between 2015 and 2019")
+
+
+    # Read excel
+    da_real_data = pd.read_excel(DA_EXCEL_REAL, "2015-2019",
+                                 engine='openpyxl',
+                                 skiprows=7)
+    # clean the data
+    da_real_data.drop(0, inplace=True)
+    da_real_data = da_real_data[:-1]
+
+    # Get only the required columns
+    cols = da_real_data.columns
+
+    da_data = da_real_data[[cols[i] for i in [2, 3, 6]]]
+    da_data_temp = copy.deepcopy(da_data)
+    cols_new = da_data_temp.columns
+    new_names = ["Day", "Time", "Price"]
+    da_data_temp.rename(
+        columns={cols_new[i]: new_names[i] for i in range(3)}, inplace=True)
+
+    da_data_temp["Date"] = np.nan
+    for idx, row in da_data_temp.iterrows():
+        mins = row["Time"].hour*60
+        time_change = datetime.timedelta(minutes=mins)
+        da_data_temp.at[idx, "Date"] = row["Day"]+time_change
+
+    # add a row at the end
+    indx = max(da_data_temp.index)
+
+    # Add a row to the last so I can refill every 15 mins
+    da_data_temp.loc[indx+1] = [np.nan,
+                                np.nan,
+                                da_data_temp.at[indx, "Price"],
+                                da_data_temp.at[indx, "Date"]+datetime.timedelta(minutes=60)]
+
+    # Select only price data
+    da_data_final = da_data_temp[["Date", "Price"]]
+
+    # Create a Date Time so I can pass the proper index
+    idx_0 = min(da_data_final.index)
+    start = da_data_final.at[idx_0, "Date"]
+    dates = pd.date_range(start, periods=da_data_final.shape[0], freq="H")
+    da_data_final["Date"] = dates
+    da_data_final.set_index("Date", inplace=True)
+
+    # Resample to 15 mins
+    da_data_final_15m = da_data_final.resample("15min").ffill()
+
+    # Use Queries to filter the data to the required year
+    da_data_year_15m = da_data_final_15m.query(
+        f"index < '{year+1}-01-01 00:00:00'")
+    da_data_year_15m = da_data_year_15m.query(
+        f"index >= '{year}-01-01 00:00:00'")
+    da_price = da_data_year_15m["Price"]
+
+    return da_price
+
+def get_real_values_id(year=2018):
+    ID_EXCEL_REAL = os.path.join(ELECTRICITY_MARKETS_DIR,"raw", "real_data","ID_RawData.xlsx")
+    if not os.path.isfile(ID_EXCEL_REAL):
+        raise AssertionError(
+            f"File with Intraday Data does not exist: \n {ID_EXCEL_REAL}")
+    
+    if year not in range(2015,2020):
+        raise ValueError("Year must be between 2015 and 2019")
+    # Read excel for Intra Day
+    id_real_data = pd.read_excel(ID_EXCEL_REAL, "2015-2019",
+                                        # index_col="Year",
+                                        engine='openpyxl',
+                                        skiprows=7)
+        
+    id_real_data.drop(0, inplace=True)
+    id_real_data=id_real_data[:-1]
+    cols = id_real_data.columns
+
+
+    # Get only the required columns
+    id_data= id_real_data[[cols[i] for i in [2,3,6]]]
+    id_data_temp = copy.deepcopy(id_data)
+    cols_new = id_data_temp.columns
+    new_names = ["Day", "Time", "Price"]
+    id_data_temp.rename(columns = {cols_new[i]:new_names[i] for i in range(3)}, inplace=True)
+
+    id_data_temp["Date"] = np.nan
+    for idx,row in id_data_temp.iterrows():
+        mins = row["Time"].hour*60 + row["Time"].minute
+        time_change = datetime.timedelta(minutes= mins)
+        id_data_temp.at[idx,"Date"] = row["Day"]+time_change
+
+    #add a row at the end
+    indx = max(id_data_temp.index)
+
+    # Add a row to the last so I can refill every 15 mins
+    id_data_temp.loc[indx+1] = [np.nan, 
+                                np.nan,
+                                id_data_temp.at[indx, "Price"],
+                                id_data_temp.at[indx,"Date"]+datetime.timedelta(minutes=60)]
+
+    # Select only price data
+    id_data_final= id_data_temp[["Date", "Price"]]
+
+    # Create a Date Time so I can pass the proper index
+    idx_0 = min(id_data_final.index)
+    start = id_data_final.at[idx_0,"Date"]
+    dates = pd.date_range(start, periods=id_data_final.shape[0], freq="15T")
+    id_data_final["Date"]=dates
+    id_data_final.set_index("Date", inplace=True)
+
+    # Resample to 15 mins
+    id_data_final_15m = id_data_final.resample("15min").ffill()
+
+    # Use Queries to filter the data to the required year
+    id_data_year_15m = id_data_final_15m.query(f"index < '{year+1}-01-01 00:00:00'")
+    id_data_year_15m =id_data_year_15m.query(f"index >= '{year}-01-01 00:00:00'")
+    id_price = id_data_year_15m["Price"]
+    
+    return id_price
+
+
 
 
 if __name__ == '__main__':
