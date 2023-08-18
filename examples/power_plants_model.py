@@ -206,8 +206,11 @@ def calculate_kpis(results, market_data):
     for idx, value in income_total.items():
         kpis[idx] = value
 
+    income["Date"] = results.index[:leng]
+    income_df = pd.DataFrame.from_dict(income)
+    income_df.set_index("Date", inplace=True)
     kpis = pd.Series(kpis)
-    return kpis
+    return kpis, income_df
 
 
 def model_power_plant_scenario(scenario, district_df, market_data):
@@ -229,9 +232,15 @@ def model_power_plant_scenario(scenario, district_df, market_data):
     model = build_model_and_constraints(es)
     solved_model = solve_model(model)
     results = post_process_results(solved_model)
-    kpis = calculate_kpis(results, market_data)
 
-    return results, kpis
+    try:
+        results = results[["b_el_out, s_fb","b_el_out, s_fp","b_el_out, s_da","b_el_out, s_id","source, b_el_out"]]
+    except:
+        pass
+
+    kpis, income_df = calculate_kpis(results, market_data)
+
+    return results, kpis, income_df
 
 
 def solve_and_write_data(year=2020, days=365, use_real_data=False):
@@ -257,22 +266,28 @@ def solve_and_write_data(year=2020, days=365, use_real_data=False):
     district_df, market_data = get_boundary_data(year=year, days=days, use_real_data=use_real_data)
 
     for scenario in PowerPlants:
-        results, kpis = model_power_plant_scenario(
+        results, kpis, income_df = model_power_plant_scenario(
             scenario, district_df, market_data)
 
         results_dict[scenario] = results
 
         # Labels for spreadsheets
         ts_name = scenario.name + '-TimeSeries'
+        cashflow_name = scenario.name + "-Cashflow"
         kpi_name = scenario.name + '-KPIs'
 
         # Open Excel Writer
         workbook = writer.book
+        # Save results and kpis to excel
         worksheet = workbook.add_worksheet(ts_name)
         writer.sheets[ts_name] = worksheet
-
-        # Save results and kpis to excel
         results.to_excel(writer, sheet_name=ts_name)
+
+        worksheet = workbook.add_worksheet(cashflow_name)
+        writer.sheets[cashflow_name] = worksheet
+        income_df.to_excel(writer, sheet_name=cashflow_name)
+
+
         worksheet = workbook.add_worksheet(kpi_name)
         writer.sheets[kpi_name] = worksheet
         kpis.to_excel(writer, sheet_name=kpi_name)
@@ -320,5 +335,5 @@ def main(year=2020, days=365, use_real_data=False):
 
 
 if __name__ == '__main__':
-    main(year=2018, days=14, use_real_data=True)
-    main(year=2018, days=14, use_real_data=False)
+    main(year=2018, days=365, use_real_data=True)
+    main(year=2018, days=365, use_real_data=False)
